@@ -1,91 +1,108 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>Klokah 音檔擷取工具</title>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>Klokah 音檔下載工具</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
-    input, button { padding: 8px; margin: 5px 0; }
-    .sentence { padding: 10px; background: #fff; margin: 10px 0; border-radius: 6px; }
-    audio { display: block; margin-top: 5px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      line-height: 1.6;
+    }
+    h2 {
+      margin-top: 2rem;
+      color: #444;
+    }
+    .audio-block {
+      border-bottom: 1px solid #ccc;
+      padding: 1rem 0;
+    }
+    .audio-block p {
+      margin: 0.3em 0;
+    }
+    .zip-link {
+      margin-top: 2rem;
+      display: block;
+      font-size: 1.2em;
+      color: #0066cc;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
-  <h2>Klokah 音檔擷取工具</h2>
-  <p>請輸入 klokah 網址：</p>
-  <input type="text" id="url" placeholder="https://web.klokah.tw/text/read.php?tid=8030" size="60">
-  <button id="fetch">擷取音檔</button>
-  <button id="download">⬇️ 下載全部 MP3</button>
-  <div id="progress"></div>
-  <div id="results"></div>
+  <h1>Klokah 音檔下載工具</h1>
+
+  <!-- 原本的 HTML 結構（模擬） -->
+  <div id="read-main">
+    <div class="read-sentence Ab" data-value="99140">
+      <div class="word">Ha</div> <div class="word">la</div> <div class="word">ta</div>
+      <div class="word">hla</div> <div class="word">huy</div> <div class="word">r</div>
+      <div class="word">gyax</div> <div class="word">Mi</div> <div class="word">ta</div>
+      <div class="word">qom</div> <div class="word">ru</div> <div class="word">qa</div>
+      <div class="word">nux</div>
+    </div>
+    <div class="read-sentence Ch" data-value="99140">
+      我們一起上山拜訪穿山甲和鹿
+    </div>
+
+    <div class="read-sentence Ab" data-value="99141">
+      <div class="word">k</div> <div class="word">tay</div> <div class="word">syaw</div>
+      <div class="word">bih</div> <div class="word">tu</div> <div class="word">qiy</div>
+    </div>
+    <div class="read-sentence Ch" data-value="99141">
+      你看路旁有一隻兔子跳跳跳
+    </div>
+  </div>
+
+  <div id="audioSet">
+    <audio data-value="99140" data-order="1" preload="none">
+      <source src="https://web.klokah.tw/text/sound/8030/99140.mp3" />
+    </audio>
+    <audio data-value="99141" data-order="2" preload="none">
+      <source src="https://web.klokah.tw/text/sound/8030/99141.mp3" />
+    </audio>
+  </div>
+
+  <a href="php/downloadZip.php?tid=8030" style="display:none" id="zip-link">下載音檔zip</a>
+
+  <!-- 音檔顯示區 -->
+  <div id="audio-download-list"></div>
 
   <script>
-    let mp3List = [];
+    document.addEventListener("DOMContentLoaded", function () {
+      const container = document.getElementById("audio-download-list");
+      container.innerHTML = `<h2>📂 音檔下載列表</h2>`;
 
-    $('#fetch').click(async function () {
-      const url = $('#url').val().trim();
-      if (!url) return alert('請輸入網址');
-      $('#results').html('讀取中...');
-      try {
-        const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-        const abList = $(html).find('div.read-sentence.Ab');
-        const chList = $(html).find('div.read-sentence.Ch');
-        const audioTags = $(html).find('#audioSet audio source');
-        const zipLink = $(html).find("a[href*='downloadZip']").attr("href");
-        const tid = new URL(url).searchParams.get("tid");
-        $('#results').html('');
-        mp3List = [];
+      const audioTags = document.querySelectorAll("#audioSet audio");
 
-        for (let i = 0; i < audioTags.length; i++) {
-          const src = $(audioTags[i]).attr('src');
-          const ch = $(chList[i]).text().trim();
-          const ab = $(abList[i]).text().trim();
-          const name = `${ch.substring(0, 20).replace(/[^a-zA-Z0-9一-龥]/g, '_')}.mp3`;
-          const fullUrl = `https://web.klokah.tw${src}`;
-          mp3List.push({ name, url: fullUrl });
+      audioTags.forEach((audio) => {
+        const id = audio.getAttribute("data-value");
+        const mp3Src = audio.querySelector("source")?.getAttribute("src") || "";
 
-          $('#results').append(`
-            <div class="sentence">
-              <strong>${ch}</strong><br>
-              <em>${ab}</em>
-              <audio controls src="${fullUrl}"></audio>
-            </div>
-          `);
-        }
+        const abElement = document.querySelector(`.read-sentence.Ab[data-value='${id}']`);
+        const chElement = document.querySelector(`.read-sentence.Ch[data-value='${id}']`);
+        const abText = abElement ? Array.from(abElement.querySelectorAll(".word")).map(w => w.textContent).join(" ") : "(無原文)";
+        const chText = chElement ? chElement.textContent.trim() : "(無翻譯)";
 
-        if (zipLink && tid) {
-          $('#results').prepend(`<p><a href="https://web.klokah.tw${zipLink}" target="_blank">⬇️ 下載 ZIP 音檔（tid=${tid}）</a></p>`);
-        }
-      } catch (e) {
-        $('#results').html('❌ 擷取失敗');
-        console.error(e);
+        const block = document.createElement("div");
+        block.className = "audio-block";
+        block.innerHTML = `
+          <p><strong>ID:</strong> ${id}</p>
+          <p><strong>原文:</strong> ${abText}</p>
+          <p><strong>翻譯:</strong> ${chText}</p>
+          <a href="${mp3Src}" download>🎵 下載 MP3</a>
+        `;
+        container.appendChild(block);
+      });
+
+      // 顯示 ZIP 檔案
+      const zipLink = document.getElementById("zip-link");
+      if (zipLink) {
+        zipLink.style.display = "block";
+        zipLink.classList.add("zip-link");
+        zipLink.textContent = "📦 下載整份 ZIP 音檔";
+        container.appendChild(zipLink);
       }
-    });
-
-    $('#download').click(async function () {
-      if (mp3List.length === 0) return alert('尚未擷取任何音檔');
-
-      const zip = new JSZip();
-      let count = 0;
-      $('#progress').text('開始下載...');
-
-      for (const item of mp3List) {
-        try {
-          const blob = await fetch(item.url).then(r => r.blob());
-          zip.file(item.name, blob);
-          count++;
-          $('#progress').text(`已加入 ${count} 個音檔...`);
-        } catch {
-          console.warn('無法下載', item.url);
-        }
-      }
-
-      const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, 'klokah_mp3.zip');
-      $('#progress').text('✅ 完成下載');
     });
   </script>
 </body>
