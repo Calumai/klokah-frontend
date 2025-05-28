@@ -2,108 +2,73 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>Klokah 音檔下載工具</title>
+  <title>Klokah 音檔擷取工具</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 2rem;
-      line-height: 1.6;
-    }
-    h2 {
-      margin-top: 2rem;
-      color: #444;
-    }
-    .audio-block {
-      border-bottom: 1px solid #ccc;
-      padding: 1rem 0;
-    }
-    .audio-block p {
-      margin: 0.3em 0;
-    }
-    .zip-link {
-      margin-top: 2rem;
-      display: block;
-      font-size: 1.2em;
-      color: #0066cc;
-      text-decoration: none;
-    }
+    body { font-family: sans-serif; padding: 2em; }
+    input, button { margin: 0.5em 0; padding: 0.5em; }
+    .sentence { margin: 1em 0; padding: 1em; border: 1px solid #ccc; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <h1>Klokah 音檔下載工具</h1>
 
-  <!-- 原本的 HTML 結構（模擬） -->
-  <div id="read-main">
-    <div class="read-sentence Ab" data-value="99140">
-      <div class="word">Ha</div> <div class="word">la</div> <div class="word">ta</div>
-      <div class="word">hla</div> <div class="word">huy</div> <div class="word">r</div>
-      <div class="word">gyax</div> <div class="word">Mi</div> <div class="word">ta</div>
-      <div class="word">qom</div> <div class="word">ru</div> <div class="word">qa</div>
-      <div class="word">nux</div>
-    </div>
-    <div class="read-sentence Ch" data-value="99140">
-      我們一起上山拜訪穿山甲和鹿
-    </div>
+  <h1>Klokah 音檔擷取工具</h1>
+  <input type="text" id="url" size="60" placeholder="貼上 klokah 網址（如 https://web.klokah.tw/text/read.php?tid=8030）">
+  <button id="fetch">擷取內容</button>
 
-    <div class="read-sentence Ab" data-value="99141">
-      <div class="word">k</div> <div class="word">tay</div> <div class="word">syaw</div>
-      <div class="word">bih</div> <div class="word">tu</div> <div class="word">qiy</div>
-    </div>
-    <div class="read-sentence Ch" data-value="99141">
-      你看路旁有一隻兔子跳跳跳
-    </div>
-  </div>
-
-  <div id="audioSet">
-    <audio data-value="99140" data-order="1" preload="none">
-      <source src="https://web.klokah.tw/text/sound/8030/99140.mp3" />
-    </audio>
-    <audio data-value="99141" data-order="2" preload="none">
-      <source src="https://web.klokah.tw/text/sound/8030/99141.mp3" />
-    </audio>
-  </div>
-
-  <a href="php/downloadZip.php?tid=8030" style="display:none" id="zip-link">下載音檔zip</a>
-
-  <!-- 音檔顯示區 -->
-  <div id="audio-download-list"></div>
+  <div id="download-zip" style="margin-top: 2em;"></div>
+  <div id="results"></div>
 
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const container = document.getElementById("audio-download-list");
-      container.innerHTML = `<h2>📂 音檔下載列表</h2>`;
+    $('#fetch').click(async function () {
+      const url = $('#url').val();
+      if (!url.includes('tid=')) {
+        alert('網址格式錯誤');
+        return;
+      }
 
-      const audioTags = document.querySelectorAll("#audioSet audio");
+      const tid = url.split('tid=')[1].split('&')[0];
+      const proxiedURL = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      $('#results').html('載入中...');
+      $('#download-zip').empty();
 
-      audioTags.forEach((audio) => {
-        const id = audio.getAttribute("data-value");
-        const mp3Src = audio.querySelector("source")?.getAttribute("src") || "";
+      try {
+        const html = await $.get(proxiedURL);
+        const doc = $(html);
 
-        const abElement = document.querySelector(`.read-sentence.Ab[data-value='${id}']`);
-        const chElement = document.querySelector(`.read-sentence.Ch[data-value='${id}']`);
-        const abText = abElement ? Array.from(abElement.querySelectorAll(".word")).map(w => w.textContent).join(" ") : "(無原文)";
-        const chText = chElement ? chElement.textContent.trim() : "(無翻譯)";
+        const abList = doc.find('.read-sentence.Ab');
+        const chList = doc.find('.read-sentence.Ch');
+        const audioList = doc.find('#audioSet audio');
 
-        const block = document.createElement("div");
-        block.className = "audio-block";
-        block.innerHTML = `
-          <p><strong>ID:</strong> ${id}</p>
-          <p><strong>原文:</strong> ${abText}</p>
-          <p><strong>翻譯:</strong> ${chText}</p>
-          <a href="${mp3Src}" download>🎵 下載 MP3</a>
-        `;
-        container.appendChild(block);
-      });
+        const zipLink = `https://web.klokah.tw/text/php/downloadZip.php?tid=${tid}`;
+        $('#download-zip').html(`<a href="${zipLink}" target="_blank">📦 一鍵下載所有音檔 (ZIP)</a>`);
 
-      // 顯示 ZIP 檔案
-      const zipLink = document.getElementById("zip-link");
-      if (zipLink) {
-        zipLink.style.display = "block";
-        zipLink.classList.add("zip-link");
-        zipLink.textContent = "📦 下載整份 ZIP 音檔";
-        container.appendChild(zipLink);
+        $('#results').empty();
+
+        for (let i = 0; i < audioList.length; i++) {
+          const audio = $(audioList[i]);
+          const id = audio.attr('data-value');
+          const src = audio.find('source').attr('src');
+
+          const abText = abList.filter(`[data-value=${id}]`).text().trim().replace(/\s+/g, ' ');
+          const chText = chList.filter(`[data-value=${id}]`).text().trim();
+
+          $('#results').append(`
+            <div class="sentence">
+              <p><strong>原文：</strong>${abText}</p>
+              <p><strong>翻譯：</strong>${chText}</p>
+              <audio controls src="${src}"></audio><br>
+              <a href="${src}" download>⬇️ 下載 MP3</a>
+            </div>
+          `);
+        }
+
+      } catch (e) {
+        $('#results').html('❌ 擷取失敗，請確認網址正確且網頁可公開讀取。');
+        console.error(e);
       }
     });
   </script>
+
 </body>
 </html>
