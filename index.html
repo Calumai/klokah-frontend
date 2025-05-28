@@ -1,74 +1,80 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Klokah 音檔擷取工具</title>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 2em; }
-    input, button { margin: 0.5em 0; padding: 0.5em; }
-    .sentence { margin: 1em 0; padding: 1em; border: 1px solid #ccc; border-radius: 5px; }
+    body { font-family: sans-serif; padding: 20px; background: #f8f8f8; }
+    input, button { padding: 8px; margin: 10px 0; }
+    .sentence { background: white; border-radius: 6px; padding: 10px; margin: 10px 0; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    .sentence audio { display: block; margin-top: 5px; }
+    .zip-link { margin: 20px 0; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <h1>Klokah 音檔擷取工具</h1>
-  <input type="text" id="url" size="60" placeholder="貼上 klokah 網址（如 https://web.klokah.tw/text/read.php?tid=8030）">
-  <button id="fetch">擷取內容</button>
+<h2>Klokah 音檔擷取工具</h2>
+<p>請輸入 klokah 課文網址（例如 <code>https://web.klokah.tw/text/read.php?tid=8030</code>）</p>
 
-  <div id="download-zip" style="margin-top: 2em;"></div>
-  <div id="results"></div>
+<input type="text" id="url" size="60" placeholder="請輸入 klokah 網址">
+<button id="fetch">擷取內容</button>
 
-  <script>
-    $('#fetch').click(async function () {
-      const url = $('#url').val();
-      if (!url.includes('tid=')) {
-        alert('網址格式錯誤');
-        return;
-      }
+<div class="zip-link" id="download-link"></div>
+<div id="results"></div>
 
-      const tid = url.split('tid=')[1].split('&')[0];
-      const proxiedURL = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      $('#results').html('載入中...');
-      $('#download-zip').empty();
+<script>
+  $('#fetch').click(async function () {
+    const url = $('#url').val().trim();
+    if (!url.includes('tid=')) {
+      alert('網址錯誤，請確認包含 tid=');
+      return;
+    }
 
-      try {
-        const html = await $.get(proxiedURL);
-        const doc = $(html);
+    const tid = url.split('tid=')[1].split('&')[0];
+    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+    $('#results').html('載入中...');
+    $('#download-link').html('');
 
-        const abList = doc.find('.read-sentence.Ab');
-        const chList = doc.find('.read-sentence.Ch');
-        const audioList = doc.find('#audioSet audio');
+    try {
+      const html = await $.get(proxyUrl);
+      const $doc = $(html);
+      const audios = $doc.find('#audioSet audio');
+      const chList = $doc.find('.read-sentence.Ch');
+      const abList = $doc.find('.read-sentence.Ab');
 
-        const zipLink = `https://web.klokah.tw/text/php/downloadZip.php?tid=${tid}`;
-        $('#download-zip').html(`<a href="${zipLink}" target="_blank">📦 一鍵下載所有音檔 (ZIP)</a>`);
+      $('#download-link').html(`<a href="https://web.klokah.tw/text/php/downloadZip.php?tid=${tid}" target="_blank">📦 一鍵下載 ZIP 音檔</a>`);
+      $('#results').empty();
 
-        $('#results').empty();
+      audios.each(function () {
+        const id = $(this).attr('data-value');
+        const src = $(this).find('source').attr('src');
+        const chText = chList.filter(`[data-value="${id}"]`).text().trim();
+        const abText = abList.filter(function () {
+          return $(this).find('.read-chinese-btn[data-value="' + id + '"]').length > 0;
+        }).text().replace(chText, '').trim();
 
-        for (let i = 0; i < audioList.length; i++) {
-          const audio = $(audioList[i]);
-          const id = audio.attr('data-value');
-          const src = audio.find('source').attr('src');
-
-          const abText = abList.filter(`[data-value=${id}]`).text().trim().replace(/\s+/g, ' ');
-          const chText = chList.filter(`[data-value=${id}]`).text().trim();
-
+        if (src && chText) {
           $('#results').append(`
             <div class="sentence">
-              <p><strong>原文：</strong>${abText}</p>
-              <p><strong>翻譯：</strong>${chText}</p>
-              <audio controls src="${src}"></audio><br>
+              <div><strong>原文：</strong>${abText}</div>
+              <div><strong>翻譯：</strong>${chText}</div>
+              <audio controls src="${src}"></audio>
               <a href="${src}" download>⬇️ 下載 MP3</a>
             </div>
           `);
         }
+      });
 
-      } catch (e) {
-        $('#results').html('❌ 擷取失敗，請確認網址正確且網頁可公開讀取。');
-        console.error(e);
+      if ($('#results').html().trim() === '') {
+        $('#results').html('❌ 找不到任何句子或音檔。');
       }
-    });
-  </script>
+    } catch (err) {
+      console.error(err);
+      $('#results').html('❌ 擷取失敗，請檢查網址或網頁格式。');
+    }
+  });
+</script>
 
 </body>
 </html>
