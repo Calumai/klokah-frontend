@@ -10,8 +10,8 @@
     body { font-family: sans-serif; padding: 20px; background: #f7f7f7; }
     input, button { padding: 8px; margin: 5px 0; }
     .progress { margin-top: 10px; }
-    audio { margin: 5px 0; display: block; }
-    .sentence-block { margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; box-shadow: 0 0 3px #ccc; }
+    audio { margin: 5px 0; }
+    .sentence-block { margin-bottom: 15px; padding: 10px; background: white; border-radius: 8px; }
   </style>
 </head>
 <body>
@@ -19,8 +19,7 @@
   <p>輸入 klokah 頁面網址（例如：<code>https://web.klokah.tw/text/read.php?tid=435</code>）</p>
   <input type="text" id="url" placeholder="請輸入 klokah 網址" size="60">
   <button id="fetch">擷取音檔</button>
-  <br>
-  <input type="text" id="search" placeholder="🔍 搜尋句子文字以過濾下載" size="40">
+  <input type="text" id="search" placeholder="搜尋句子文字以過濾下載" size="40">
   <button id="download-all">⬇️ 一鍵下載 MP3</button>
   <div class="progress" id="progress"></div>
   <div id="results"></div>
@@ -31,7 +30,7 @@
     $('#fetch').click(async function () {
       const url = $('#url').val();
       if (!url) return alert('請輸入網址');
-      $('#results').html('📥 載入中...');
+      $('#results').html('載入中...');
       try {
         const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(url)}`);
         const abList = $(html).find('div.read-sentence.Ab').toArray();
@@ -59,7 +58,7 @@
           }
         }
       } catch (err) {
-        $('#results').html('❌ 無法擷取網頁內容，可能是網址錯誤或 CORS 阻擋');
+        $('#results').html('❌ 無法擷取網頁內容');
       }
     });
 
@@ -67,7 +66,7 @@
       const keyword = $('#search').val().toLowerCase();
       const zip = new JSZip();
       let count = 0;
-      $('#progress').text('⏳ 開始打包下載...');
+      $('#progress').text('開始下載...');
 
       for (const item of mp3List) {
         if (keyword && !item.ch.toLowerCase().includes(keyword)) continue;
@@ -75,13 +74,13 @@
           const blob = await fetch(`https://corsproxy.io/?${item.url}`).then(r => r.blob());
           zip.file(item.name, blob);
           count++;
-          $('#progress').text(`✅ 已加入 ${count} 個音檔...`);
+          $('#progress').text(`已加入 ${count} 個音檔...`);
         } catch (e) {
           console.warn('下載失敗', item.url);
         }
       }
 
-      if (count === 0) return alert('⚠️ 沒有符合的音檔可下載');
+      if (count === 0) return alert('沒有符合的音檔可下載');
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, 'klokah_mp3.zip');
       $('#progress').text('✅ 音檔已打包完成');
