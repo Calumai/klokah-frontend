@@ -16,7 +16,7 @@
 </head>
 <body>
   <h1>Klokah 音檔擷取工具</h1>
-  <p>輸入 klokah 頁面網址（例如：<code>https://web.klokah.tw/text/read.php?tid=435</code>）</p>
+  <p>請貼上 Klokah 文章網址（如：<code>https://web.klokah.tw/text/read.php?tid=8030</code>）</p>
   <input type="text" id="url" placeholder="請輸入 klokah 網址" size="60">
   <button id="fetch">擷取音檔</button>
   <input type="text" id="search" placeholder="搜尋句子文字以過濾下載" size="40">
@@ -28,9 +28,9 @@
     let mp3List = [];
 
     $('#fetch').click(async function () {
-      const url = $('#url').val();
+      const url = $('#url').val().trim();
       if (!url) return alert('請輸入網址');
-      $('#results').html('載入中...');
+      $('#results').html('🔄 載入中...');
       try {
         const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(url)}`);
         const abList = $(html).find('div.read-sentence.Ab').toArray();
@@ -57,6 +57,8 @@
             `);
           }
         }
+
+        if (mp3List.length === 0) $('#results').html('❌ 沒有找到音檔');
       } catch (err) {
         $('#results').html('❌ 無法擷取網頁內容');
       }
