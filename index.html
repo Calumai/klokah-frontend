@@ -1,69 +1,58 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>Klokah 音檔顯示工具</title>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
-    input, button { padding: 8px; margin: 10px 0; }
-    .sentence-block { padding: 10px; background: white; margin: 10px 0; border-radius: 5px; }
-    audio { display: block; margin-top: 5px; }
-    .zip-link { margin: 20px 0; font-weight: bold; }
-  </style>
+  <meta charset="UTF-8" />
+  <title>KLOKAH 音檔下載工具</title>
 </head>
 <body>
-  <h2>Klokah 音檔擷取顯示工具</h2>
-  <p>輸入 klokah 網址，例如：https://web.klokah.tw/text/read.php?tid=8030</p>
-  <input type="text" id="url" size="70" placeholder="請輸入 klokah 網址">
-  <button id="load">載入音檔</button>
+  <h1>輸入網址，自動提取音檔</h1>
+  <input type="text" id="targetUrl" placeholder="貼上 klokah 網址">
+  <button onclick="fetchAndShowLinks()">取得音檔</button>
 
-  <div id="zip-link" class="zip-link"></div>
-  <div id="results"></div>
+  <div id="result"></div>
 
   <script>
-    $('#load').click(async function () {
-      const inputUrl = $('#url').val();
-      if (!inputUrl) return alert('請輸入網址');
+    async function fetchAndShowLinks() {
+      const url = document.getElementById("targetUrl").value;
+      const tidMatch = url.match(/tid=(\d+)/);
+      const tid = tidMatch ? tidMatch[1] : null;
 
-      $('#results').html('載入中...');
-      $('#zip-link').html('');
+      if (!tid) return alert("無法解析 tid，請確認網址格式");
 
-      try {
-        const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(inputUrl)}`);
-        const $doc = $(html);
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
 
-        // 1. 顯示 zip 檔案連結
-        const zipHref = $doc.find("a[href*='downloadZip.php']").attr('href');
-        if (zipHref) {
-          const fullZipUrl = new URL(zipHref, inputUrl).href;
-          $('#zip-link').html(`<a href="${fullZipUrl}" target="_blank">⬇️ 下載 ZIP 音檔</a>`);
-        }
+      const res = await fetch(proxyUrl);
+      const html = await res.text();
 
-        // 2. 顯示每句的音檔連結與播放
-        const $audios = $doc.find('#audioSet audio source');
-        const $chTexts = $doc.find('.read-sentence.Ch');
+      const div = document.createElement("div");
+      div.innerHTML = html;
 
-        const resultHtml = [];
-        $audios.each(function (i) {
-          const mp3Url = $(this).attr('src');
-          const chText = $($chTexts[i]).text().trim();
-          if (mp3Url && chText) {
-            resultHtml.push(`
-              <div class="sentence-block">
-                <div>${chText}</div>
-                <audio controls src="${mp3Url}"></audio>
-                <a href="${mp3Url}" download>下載 MP3</a>
-              </div>
-            `);
-          }
-        });
+      const audioTags = div.querySelectorAll("audio > source");
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = `<h2>逐句 MP3 音檔 (${audioTags.length} 筆)</h2>`;
 
-        $('#results').html(resultHtml.join(''));
-      } catch (e) {
-        $('#results').html('❌ 載入失敗，請確認網址是否正確或可公開存取');
+      audioTags.forEach((el, i) => {
+        const href = el.getAttribute("src");
+        const name = href.split("/").pop();
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = name;
+        a.innerText = `下載 ${name}`;
+        a.style.display = "block";
+        resultDiv.appendChild(a);
+      });
+
+      const zipLink = div.querySelector(`a[href*='downloadZip.php?tid=${tid}']`);
+      if (zipLink) {
+        const a = document.createElement("a");
+        a.href = `https://web.klokah.tw/text/php/downloadZip.php?tid=${tid}`;
+        a.download = `tid_${tid}.zip`;
+        a.innerText = "🔽 下載整包 ZIP 音檔";
+        a.style.display = "block";
+        a.style.marginTop = "1em";
+        resultDiv.appendChild(a);
       }
-    });
+    }
   </script>
 </body>
 </html>
