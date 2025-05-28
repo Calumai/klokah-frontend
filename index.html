@@ -2,66 +2,66 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>Klokah 音檔下載器</title>
+  <title>Klokah 音檔顯示工具</title>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
     input, button { padding: 8px; margin: 10px 0; }
-    .sentence-block { background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
-    audio { display: block; margin-top: 8px; }
-    .zip-link { margin-top: 20px; font-weight: bold; }
+    .sentence-block { padding: 10px; background: white; margin: 10px 0; border-radius: 5px; }
+    audio { display: block; margin-top: 5px; }
+    .zip-link { margin: 20px 0; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Klokah 音檔下載工具</h1>
-  <p>請輸入 klokah 語料網址，例如：https://web.klokah.tw/text/read.php?tid=8030</p>
-  <input type="text" id="url" size="60" placeholder="請輸入 klokah 網址">
-  <button id="fetch">擷取音檔</button>
+  <h2>Klokah 音檔擷取顯示工具</h2>
+  <p>輸入 klokah 網址，例如：https://web.klokah.tw/text/read.php?tid=8030</p>
+  <input type="text" id="url" size="70" placeholder="請輸入 klokah 網址">
+  <button id="load">載入音檔</button>
+
+  <div id="zip-link" class="zip-link"></div>
   <div id="results"></div>
 
   <script>
-    $('#fetch').click(async function () {
-      const url = $('#url').val();
-      if (!url.includes('klokah')) return alert('請輸入 klokah 網址');
-      const tidMatch = url.match(/tid=(\d+)/);
-      if (!tidMatch) return alert('網址中找不到 tid');
-      const tid = tidMatch[1];
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    $('#load').click(async function () {
+      const inputUrl = $('#url').val();
+      if (!inputUrl) return alert('請輸入網址');
+
       $('#results').html('載入中...');
+      $('#zip-link').html('');
 
       try {
-        const html = await $.get(proxyUrl);
-        const page = $('<div>').html(html);
+        const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(inputUrl)}`);
+        const $doc = $(html);
 
-        const abList = page.find('.read-sentence.Ab');
-        const chList = page.find('.read-sentence.Ch');
-        const audioList = page.find('#audioSet audio source');
-        let output = '';
-
-        for (let i = 0; i < audioList.length; i++) {
-          const mp3Url = $(audioList[i]).attr('src');
-          const chText = $(chList[i]).text().trim();
-          const abText = $(abList[i]).text().trim();
-
-          output += `
-            <div class="sentence-block">
-              <b>${chText}</b><br>
-              <i>${abText}</i>
-              <audio controls src="${mp3Url}"></audio>
-              <a href="${mp3Url}" download>下載 MP3</a>
-            </div>
-          `;
+        // 1. 顯示 zip 檔案連結
+        const zipHref = $doc.find("a[href*='downloadZip.php']").attr('href');
+        if (zipHref) {
+          const fullZipUrl = new URL(zipHref, inputUrl).href;
+          $('#zip-link').html(`<a href="${fullZipUrl}" target="_blank">⬇️ 下載 ZIP 音檔</a>`);
         }
 
-        const zipLink = page.find("a[href*='downloadZip.php']").attr('href');
-        if (zipLink) {
-          output += `<div class="zip-link">👉 <a href="https://web.klokah.tw/${zipLink}" target="_blank">下載全部音檔（ZIP）</a></div>`;
-        }
+        // 2. 顯示每句的音檔連結與播放
+        const $audios = $doc.find('#audioSet audio source');
+        const $chTexts = $doc.find('.read-sentence.Ch');
 
-        $('#results').html(output);
-      } catch (err) {
-        console.error(err);
-        $('#results').html('❌ 無法擷取該頁內容，請確認網址是否正確');
+        const resultHtml = [];
+        $audios.each(function (i) {
+          const mp3Url = $(this).attr('src');
+          const chText = $($chTexts[i]).text().trim();
+          if (mp3Url && chText) {
+            resultHtml.push(`
+              <div class="sentence-block">
+                <div>${chText}</div>
+                <audio controls src="${mp3Url}"></audio>
+                <a href="${mp3Url}" download>下載 MP3</a>
+              </div>
+            `);
+          }
+        });
+
+        $('#results').html(resultHtml.join(''));
+      } catch (e) {
+        $('#results').html('❌ 載入失敗，請確認網址是否正確或可公開存取');
       }
     });
   </script>
