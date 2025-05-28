@@ -1,87 +1,89 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>Klokah MP3 擷取工具</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <title>Klokah 音檔擷取工具</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    .sentence-block { margin: 10px 0; }
-    .progress-bar { width: 100%; background: #eee; height: 10px; margin: 10px 0; }
-    .progress-fill { background: #4caf50; height: 100%; width: 0%; }
+    body { font-family: sans-serif; padding: 20px; background: #f7f7f7; }
+    input, button { padding: 8px; margin: 5px 0; }
+    .progress { margin-top: 10px; }
+    audio { margin: 5px 0; }
   </style>
 </head>
 <body>
-  <h1>Klokah MP3 擷取工具</h1>
-  <input type="text" id="url" placeholder="貼上 klokah 網址" style="width: 80%;">
-  <button id="fetch">擷取</button>
-  <button id="downloadAll">⬇️ 下載全部</button>
-  <input type="text" id="search" placeholder="🔍 搜尋句子" style="float: right;">
-  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <h1>Klokah 音檔擷取工具</h1>
+  <p>輸入 klokah 頁面網址（例如：<code>https://web.klokah.tw/text/read.php?tid=435</code>）</p>
+  <input type="text" id="url" placeholder="請輸入 klokah 網址" size="60">
+  <button id="fetch">擷取音檔</button>
+  <input type="text" id="search" placeholder="搜尋句子文字以過濾下載" size="40">
+  <button id="download-all">⬇️ 一鍵下載 MP3</button>
+  <div class="progress" id="progress"></div>
   <div id="results"></div>
 
   <script>
-    let mp3Data = [];
+    let mp3List = [];
 
-    function updateProgress(percent) {
-      $('.progress-fill').css('width', percent + '%');
-    }
-
-    $('#fetch').click(function() {
+    $('#fetch').click(async function () {
       const url = $('#url').val();
       if (!url) return alert('請輸入網址');
-
-      $.get("https://corsproxy.io/?" + encodeURIComponent(url), function(html) {
-        const $html = $(html);
-        const ab = $html.find('.read-sentence.Ab');
-        const ch = $html.find('.read-sentence.Ch');
-        const mp3s = $html.find('#audioSet audio source');
-
-        mp3Data = [];
-
+      $('#results').html('載入中...');
+      try {
+        const html = await $.get(url);
+        const abList = $(html).find('div.read-sentence.Ab').toArray();
+        const chList = $(html).find('div.read-sentence.Ch').toArray();
+        const mp3ListRaw = $(html).find('#audioSet audio source').toArray();
         $('#results').empty();
-        ab.each((i, el) => {
-          const abText = $(el).text().trim();
-          const chText = $(ch[i]).text().trim();
-          const mp3Url = $(mp3s[i]).attr('src');
-          if (abText && chText && mp3Url) {
-            mp3Data.push({ name: chText, url: mp3Url });
+        mp3List = [];
+
+        for (let i = 0; i < abList.length; i++) {
+          const abText = $(abList[i]).text().trim();
+          const chText = $(chList[i]).text().trim();
+          const mp3Url = $(mp3ListRaw[i]).attr('src');
+          const fileName = chText.replace(/[^a-zA-Z0-9一-龥]/g, '_').substring(0, 30) + '.mp3';
+
+          if (mp3Url) {
+            mp3List.push({ url: mp3Url, name: fileName, ab: abText, ch: chText });
+
             $('#results').append(`
               <div class="sentence-block">
                 <b>${chText}</b><br>
                 <i>${abText}</i><br>
-              <audio controls src="${'https://corsproxy.io/?' + mp3Url}"></audio>
+                <audio controls src="https://corsproxy.io/?${mp3Url}"></audio>
               </div>
             `);
           }
-        });
-        updateProgress(100);
-      });
-    });
-
-    $('#downloadAll').click(async function() {
-      if (!mp3Data.length) return alert('尚未擷取任何音檔');
-      const zip = new JSZip();
-      for (let i = 0; i < mp3Data.length; i++) {
-        const d = mp3Data[i];
-        const resp = await fetch(`https://corsproxy.io/?${d.url}`);
-        const blob = await resp.blob();
-        zip.file(`${i+1}_${d.name}.mp3`, blob);
-        updateProgress(((i + 1) / mp3Data.length) * 100);
+        }
+      } catch (err) {
+        $('#results').html('❌ 無法擷取網頁內容');
       }
-      zip.generateAsync({type:"blob"}).then(function(content) {
-        saveAs(content, "klokah-audio.zip");
-      });
     });
 
-    $('#search').on('input', function() {
-      const q = $(this).val();
-      $('.sentence-block').each(function() {
-        const text = $(this).text();
-        $(this).toggle(text.includes(q));
-      });
+    $('#download-all').click(async function () {
+      const keyword = $('#search').val().toLowerCase();
+      const zip = new JSZip();
+      let count = 0;
+      $('#progress').text('開始下載...');
+
+      for (const item of mp3List) {
+        if (keyword && !item.ch.toLowerCase().includes(keyword)) continue;
+        try {
+          const blob = await fetch(`https://corsproxy.io/?${item.url}`).then(r => r.blob());
+          zip.file(item.name, blob);
+          count++;
+          $('#progress').text(`已加入 ${count} 個音檔...`);
+        } catch (e) {
+          console.warn('下載失敗', item.url);
+        }
+      }
+
+      if (count === 0) return alert('沒有符合的音檔可下載');
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, 'klokah_mp3.zip');
+      $('#progress').text('✅ 音檔已打包完成');
     });
   </script>
 </body>
