@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Klokah MP3 擷取工具</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    input, button { padding: 8px; margin: 5px 0; }
     #progress-container {
       display: none;
       margin-top: 10px;
@@ -20,70 +22,79 @@
       color: white;
       line-height: 20px;
     }
+    audio { display: block; margin-top: 5px; }
+    .block { background: white; padding: 10px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 0 4px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
   <h1>Klokah MP3 擷取工具</h1>
-  <input type="text" id="search" placeholder="搜尋句子..." style="width: 60%;">
+  <p>輸入 klokah 網址（如：<code>https://web.klokah.tw/text/read.php?tid=8030</code>）</p>
+  <input type="text" id="url" placeholder="請輸入 klokah 網址" style="width: 70%;">
   <button onclick="fetchMp3Links()">擷取 MP3</button>
   <button onclick="downloadAllZip()">⬇️ 一鍵打包下載</button>
-  <div id="progress-container">
-    <div id="progress-bar">0%</div>
-  </div>
+  <input type="text" id="search" placeholder="搜尋句子..." style="width: 60%; margin-top: 10px;">
+  <div id="progress-container"><div id="progress-bar">0%</div></div>
   <div id="result"></div>
 
   <script>
     let mp3Data = [];
 
     async function fetchMp3Links() {
+      const inputUrl = document.getElementById('url').value.trim();
+      if (!inputUrl) return alert("請輸入 klokah 網址");
+
       const proxy = "https://api.allorigins.win/raw?url=";
-      const urlInput = prompt("請輸入 klokah 網址 (如：https://web.klokah.tw/text/read.php?tid=435)");
-      if (!urlInput) return;
-      const url = proxy + encodeURIComponent(urlInput);
+      const url = proxy + encodeURIComponent(inputUrl);
 
-      const res = await fetch(url);
-      const text = await res.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(text, 'text/html');
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
 
-      const abList = Array.from(doc.querySelectorAll('div.read-sentence.Ab'));
-      const chList = Array.from(doc.querySelectorAll('div.read-sentence.Ch'));
-      const sources = Array.from(doc.querySelectorAll('#audioSet audio source'));
-      const zipLink = doc.querySelector("a[href*='php/downloadZip.php?tid=']")?.href;
+        const abList = Array.from(doc.querySelectorAll('div.read-sentence.Ab'));
+        const chList = Array.from(doc.querySelectorAll('div.read-sentence.Ch'));
+        const sources = Array.from(doc.querySelectorAll('#audioSet audio source'));
+        const zipLink = doc.querySelector("a[href*='downloadZip']")?.getAttribute("href");
 
-      mp3Data = [];
-      const result = document.getElementById('result');
-      result.innerHTML = "";
+        mp3Data = [];
+        const result = document.getElementById('result');
+        result.innerHTML = "";
 
-      sources.forEach((el, i) => {
-        const src = el.getAttribute('src');
-        const ab = abList[i]?.textContent.trim() || "ab" + (i + 1);
-        const ch = chList[i]?.textContent.trim() || "ch" + (i + 1);
-        const fullUrl = new URL(src, urlInput).href;
-        const filename = ch.replace(/[^一-龥\w\d]/g, '_') + '.mp3';
+        if (zipLink) {
+          const zipUrl = new URL(zipLink, inputUrl).href;
+          const zipBtn = document.createElement('p');
+          zipBtn.innerHTML = `<a href="${zipUrl}" download>📦 點我直接下載官方 ZIP 包</a><hr>`;
+          result.appendChild(zipBtn);
+        }
 
-        mp3Data.push({ url: fullUrl, filename: filename, ab, ch });
+        sources.forEach((el, i) => {
+          const src = el.getAttribute('src');
+          const ab = abList[i]?.textContent.trim() || `Ab${i + 1}`;
+          const ch = chList[i]?.textContent.trim() || `Ch${i + 1}`;
+          const fullUrl = new URL(src, inputUrl).href;
+          const filename = ch.replace(/[^\u4e00-\u9fa5\w\d]/g, '_') + '.mp3';
 
-        const block = document.createElement('div');
-        block.innerHTML = `
-          <p><strong>Ab:</strong> ${ab}</p>
-          <p><strong>Ch:</strong> ${ch}</p>
-          <audio controls src="${fullUrl}"></audio><br>
-          <a href="${fullUrl}" download="${filename}">⬇️ 下載音檔</a>
-          <hr>
-        `;
-        result.appendChild(block);
-      });
+          mp3Data.push({ url: fullUrl, filename: filename, ab, ch });
 
-      if (zipLink) {
-        const zipBtn = document.createElement('p');
-        zipBtn.innerHTML = `<a href="${zipLink}" target="_blank">⬇️ 下載全部音檔（ZIP）</a>`;
-        result.prepend(zipBtn);
+          const block = document.createElement('div');
+          block.className = "block";
+          block.innerHTML = `
+            <p><strong>Ab:</strong> ${ab}</p>
+            <p><strong>Ch:</strong> ${ch}</p>
+            <audio controls src="${fullUrl}"></audio><br>
+            <a href="${fullUrl}" download="${filename}">⬇️ 下載音檔</a>
+          `;
+          result.appendChild(block);
+        });
+      } catch (e) {
+        alert("❌ 擷取失敗，請確認網址正確且網頁可公開讀取。");
       }
     }
 
     function downloadAllZip() {
       if (mp3Data.length === 0) return alert("請先擷取 MP3");
+
       const zip = new JSZip();
       const progressBar = document.getElementById("progress-bar");
       const progressContainer = document.getElementById("progress-container");
@@ -94,7 +105,7 @@
 
       let completed = 0;
 
-      const downloadPromises = mp3Data.map((data, index) =>
+      const downloadPromises = mp3Data.map((data) =>
         fetch(data.url)
           .then(res => res.blob())
           .then(blob => {
@@ -118,16 +129,19 @@
       const keyword = this.value.trim();
       const result = document.getElementById('result');
       result.innerHTML = "";
-      const filtered = keyword === "" ? mp3Data : mp3Data.filter(d => d.ab.includes(keyword) || d.ch.includes(keyword));
+
+      const filtered = keyword === "" ? mp3Data : mp3Data.filter(d =>
+        d.ab.includes(keyword) || d.ch.includes(keyword)
+      );
 
       filtered.forEach(({ ab, ch, url, filename }) => {
         const block = document.createElement('div');
+        block.className = "block";
         block.innerHTML = `
           <p><strong>Ab:</strong> ${ab}</p>
           <p><strong>Ch:</strong> ${ch}</p>
           <audio controls src="${url}"></audio><br>
           <a href="${url}" download="${filename}">⬇️ 下載音檔</a>
-          <hr>
         `;
         result.appendChild(block);
       });
