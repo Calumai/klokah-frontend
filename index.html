@@ -32,7 +32,7 @@
       if (!url) return alert('請輸入網址');
       $('#results').html('載入中...');
       try {
-        const html = await $.get(url);
+        const html = await $.get(`https://corsproxy.io/?${encodeURIComponent(url)}`);
         const abList = $(html).find('div.read-sentence.Ab').toArray();
         const chList = $(html).find('div.read-sentence.Ch').toArray();
         const mp3ListRaw = $(html).find('#audioSet audio source').toArray();
